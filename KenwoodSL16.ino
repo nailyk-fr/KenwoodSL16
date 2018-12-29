@@ -1,5 +1,5 @@
 /*
-Kenwood XS System Control
+Kenwood SL-16 System Control
 See XS-Connection.jpg for pinout.
 
 Original code from: https://github.com/saproj/KenwoodXS
@@ -27,12 +27,12 @@ Based on https://sourceforge.net/p/amforth/mailman/message/34859069/
 \   |-------------------------------|
 \  _|                               |____ Busy signal
 
-\        |----|    |--|  |--|    |--|
-\ ___----|    |----|  |--|  |----|  |____ Data signal
+\        |----|  |--|  |--|    |--|
+\ ___----|    |--|  |--|  |----|  |____ Data signal
 
 \    |    |  Start:
 \ Busy up 5ms, then:
-\ Data up 5ms, then down 3ms then:
+\ Data up 5ms, then:
 \                | 0  |  0  |    1  |
 \ 1: 4ms low 2ms high
 \ 0: 2ms low 2ms high
@@ -40,22 +40,19 @@ Based on https://sourceforge.net/p/amforth/mailman/message/34859069/
 \ Data is MSB first 16 bits.
 \ After transmitting data, both busy and data come down at same time. (also, become inputs, not output).
 
+Note - data zero is actually open collector, (or arduino input). IOW, there is no pull down, and the port just floats.
 Be aware that this could be run as a shared bus, so only output when you control the bus. Perhaps?
-
-CTRL goes high
-Some time later (2ms?) SDAT goes high for 5msec
-SDAT goes low for 5msec
-
-For each 0 bit, SDAT goes high for 2msec, then low for 2msec. Or for 1 bit, SDAT stays low for 4 msec.
-After at least 20 bits (maybe more?), SDAT stays low, and some time later, CTRL goes low.
-NOTE: It seems that things are somewhat variable, since CTRL stays on between 80 and 90 msec, depending on command.
+CTRL stays on between 80 and 90 msec, depending on command.
 
 Example word for Video1,2,3:
-111111111 11010100, where 1 is 5 Volts, 0 is 0 Volts.
-000000000 00101011 or number 43
+01111111 11010100, where 1 is 5 Volts, 0 is 0 then 5 Volts.
+10000000 00101011 or number 32768 + 43 = 32811
 Example word for Tape:
-11111111 01011010 =>
-00000000 10100101 or number 165
+01111111 01011010 =>
+10000000 10100101 or number 32768 + 165 = 32933
+Sending these commands to VR-410 seems to work:
+4096 is power on 
+4224 is power off
 ******************End of SL16******************
 */
 
@@ -67,16 +64,17 @@ enum {
   BIT_ONE_DELAY_MICROSEC = 3100,
   BIT_TERMINATOR_DELAY_MICROSEC = 1950,
   BIT_GAP_DELAY_MICROSEC = 1950,
+  ENABLE_OPEN_COLLECTOR = 0,
 };
 
 void setup() {
   Serial.begin(115200);
 
-  // Set-up XS lines
-  pinMode(CTRL, INPUT);
-  pinMode(SDAT, INPUT);
+  // Set-up SL lines
   digitalWrite(CTRL, LOW);
   digitalWrite(SDAT, LOW);
+  pinMode(CTRL, INPUT);
+  pinMode(SDAT, INPUT);
 
   // Usage
   Serial.print("MSB: ");
@@ -84,33 +82,27 @@ void setup() {
   Serial.print(" / 0x");
   Serial.println(MSB, HEX);
 
-  Serial.println("Kenwood KX-3050 commands:");
-  Serial.println("  Commands working in both the power-on mode and stand-by mode (in decimal):");
-  Serial.println("    121 - play");
-  Serial.println("    112, 113, 115, 117, 122, 123, 125 - stop");
-  Serial.println("");
-  Serial.println("  Commands working only in the power-on mode (in decimal):");
-  Serial.println("    66 - search next track");
-  Serial.println("    68 - stop");
-  Serial.println("    70 - play if stopped or paused, repeat current song if playing");
-  Serial.println("    72 - record");
-  Serial.println("    74 - search previous track");
-  Serial.println("    76 - pause");
-  Serial.println("");
-  Serial.println("Now type:");
-  Serial.println("  value 0-255 to send the corresponding command,");
-  Serial.println("  value >255 to start a loop to automatically try all commands with delay of 'value' ms.");
+  Serial.println("Kenwood VR-410 SL-16 commands:");
+  Serial.println("4096 is power on");
+  Serial.println("4224 is power off");
+  Serial.println("Type:");
+  Serial.println("  value 0-65535 to send the corresponding command,");
+  Serial.println("  value less than zero to start a loop to automatically try all commands with delay of '-value' ms.");
 }
 
 void sendWord(unsigned long word) {
   // StartBit
+  if (ENABLE_OPEN_COLLECTOR) {
+	  pinMode(SDAT, OUTPUT);
+  }
   digitalWrite(SDAT, HIGH);
   delayMicroseconds(5000);
-  digitalWrite(SDAT, LOW);
-  delayMicroseconds(3000);
 
   for (unsigned long mask = MSB; mask; mask >>= 1) {
     digitalWrite(SDAT, LOW);
+	  if (ENABLE_OPEN_COLLECTOR) {
+		  pinMode(SDAT, INPUT);
+	  }
     delayMicroseconds(BIT_GAP_DELAY_MICROSEC);
     // Bit
     if (word & mask) {
@@ -118,6 +110,9 @@ void sendWord(unsigned long word) {
 //	    digitalWrite(SDAT, LOW);
 	    delayMicroseconds(BIT_ONE_DELAY_MICROSEC);
     }
+	  if (ENABLE_OPEN_COLLECTOR) {
+		  pinMode(SDAT, OUTPUT);
+	  }
     digitalWrite(SDAT, HIGH);
 	  delayMicroseconds(BIT_TERMINATOR_DELAY_MICROSEC);
   }
@@ -131,8 +126,12 @@ void sendCommand(unsigned long word) {
   Serial.print(" / 0x");
   Serial.println(word, HEX);
 
+  digitalWrite(SDAT, LOW);
+  if (ENABLE_OPEN_COLLECTOR) {
+	  pinMode(SDAT, INPUT);
+  }
   digitalWrite(CTRL, HIGH);
-  delayMicroseconds(3000);
+  delayMicroseconds(5000);
 
   sendWord(word);
 
@@ -145,7 +144,7 @@ void sendCommand(unsigned long word) {
 }
 
 void tryAllWords(unsigned long wait) {
-  for (unsigned long cmd = 0; cmd < 512; cmd++) {
+  for (unsigned long cmd = 4097; cmd <= 4224; cmd++) {
     sendCommand(cmd);
     delay(wait);
   }
