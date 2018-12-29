@@ -21,29 +21,52 @@ CTRL then returns to Low."
 
 My reverse engineering of SL16 on Kenwood VR410 using Oscilloscope and above info.
 ******************SL16******************
+Based on https://sourceforge.net/p/amforth/mailman/message/34859069/
+\ Kenwood SL16 protocol
+
+\   |-------------------------------|
+\  _|                               |____ Busy signal
+
+\        |----|    |--|  |--|    |--|
+\ ___----|    |----|  |--|  |----|  |____ Data signal
+
+\    |    |  Start:
+\ Busy up 5ms, then:
+\ Data up 5ms, then down 3ms then:
+\                | 0  |  0  |    1  |
+\ 1: 4ms low 2ms high
+\ 0: 2ms low 2ms high
+
+\ Data is MSB first 16 bits.
+\ After transmitting data, both busy and data come down at same time. (also, become inputs, not output).
+
+Be aware that this could be run as a shared bus, so only output when you control the bus. Perhaps?
+
 CTRL goes high
 Some time later (2ms?) SDAT goes high for 5msec
 SDAT goes low for 5msec
+
 For each 0 bit, SDAT goes high for 2msec, then low for 2msec. Or for 1 bit, SDAT stays low for 4 msec.
 After at least 20 bits (maybe more?), SDAT stays low, and some time later, CTRL goes low.
 NOTE: It seems that things are somewhat variable, since CTRL stays on between 80 and 90 msec, depending on command.
 
 Example word for Video1,2,3:
-1111 11111110 11011010, where 1 is 5 Volts, 0 is 0 Volts.
-0000 00000001 00100101 or number 256 + 37 or 293
+111111111 11010100, where 1 is 5 Volts, 0 is 0 Volts.
+000000000 00101011 or number 43
 Example word for Tape:
-1111 11110110 11101101 =>
-0000 00001001 00010010 or number 2048 + 256 + 16 + 2 or 2322
+11111111 01011010 =>
+00000000 10100101 or number 165
 ******************End of SL16******************
 */
 
-const unsigned long MAX_WORD = 1l << 19; // 20 bits
+const unsigned long MSB = 1l << 15; // 16 bits
 
 enum {
   SDAT = 2,
   CTRL = 3,
-  BIT_ON_DELAY_MICROSEC = 1950,
-  BIT_OFF_DELAY_MICROSEC = 1450,
+  BIT_ONE_DELAY_MICROSEC = 3100,
+  BIT_TERMINATOR_DELAY_MICROSEC = 1950,
+  BIT_GAP_DELAY_MICROSEC = 1950,
 };
 
 void setup() {
@@ -56,10 +79,10 @@ void setup() {
   digitalWrite(SDAT, LOW);
 
   // Usage
-  Serial.print("Max Word: ");
-  Serial.print(MAX_WORD, DEC);
+  Serial.print("MSB: ");
+  Serial.print(MSB, DEC);
   Serial.print(" / 0x");
-  Serial.println(MAX_WORD, HEX);
+  Serial.println(MSB, HEX);
 
   Serial.println("Kenwood KX-3050 commands:");
   Serial.println("  Commands working in both the power-on mode and stand-by mode (in decimal):");
@@ -84,19 +107,19 @@ void sendWord(unsigned long word) {
   digitalWrite(SDAT, HIGH);
   delayMicroseconds(5000);
   digitalWrite(SDAT, LOW);
-  delayMicroseconds(5000);
+  delayMicroseconds(3000);
 
-  for (unsigned long mask = MAX_WORD; mask; mask >>= 1) {
+  for (unsigned long mask = MSB; mask; mask >>= 1) {
+    digitalWrite(SDAT, LOW);
+    delayMicroseconds(BIT_GAP_DELAY_MICROSEC);
     // Bit
     if (word & mask) {
-	    digitalWrite(SDAT, LOW);
-	    delayMicroseconds(BIT_OFF_DELAY_MICROSEC);
-    } else {
-    	digitalWrite(SDAT, HIGH);
-	    delayMicroseconds(BIT_ON_DELAY_MICROSEC);
+    	// This is a 1 bit.
+//	    digitalWrite(SDAT, LOW);
+	    delayMicroseconds(BIT_ONE_DELAY_MICROSEC);
     }
-    digitalWrite(SDAT, LOW);
-    delayMicroseconds(BIT_ON_DELAY_MICROSEC);
+    digitalWrite(SDAT, HIGH);
+	  delayMicroseconds(BIT_TERMINATOR_DELAY_MICROSEC);
   }
 }
 
@@ -114,8 +137,8 @@ void sendCommand(unsigned long word) {
   sendWord(word);
 
   // Return to default state
-  delayMicroseconds(1000);
   digitalWrite(SDAT, LOW);
+  delayMicroseconds(2000);
   digitalWrite(CTRL, LOW);
   pinMode(SDAT, INPUT);
   pinMode(CTRL, INPUT);
@@ -136,7 +159,7 @@ void loop() {
     }
     if (val < 0) {
       tryAllWords((unsigned long)(-val));
-    } else if (val > 0 && val <= MAX_WORD) {
+    } else if (val > 0 && val < (MSB << 1)) {
       sendCommand((unsigned long)(val));
     } else {
     	Serial.println("Unexpected Value");
