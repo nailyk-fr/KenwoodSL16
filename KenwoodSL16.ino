@@ -46,13 +46,12 @@ CTRL stays on between 80 and 90 msec, depending on command.
 
 Example word for Video1,2,3:
 01111111 11010100, where 1 is 5 Volts, 0 is 0 then 5 Volts.
-10000000 00101011 or number 32768 + 43 = 32811
+10000000 00101011 or number 32768 + 43 = 32811 (0x802B)
 Example word for Tape:
 01111111 01011010 =>
-10000000 10100101 or number 32768 + 165 = 32933
-Sending these commands to VR-410 seems to work:
-4096 is power on 
-4224 is power off
+10000000 10100101 or number 32768 + 165 = 32933 (0x80A5)
+01000011 01000001 is sent after power on - number 16384+512+256+64+1 = 17217 (
+
 ******************End of SL16******************
 */
 
@@ -61,9 +60,9 @@ const unsigned long MSB = 1l << 15; // 16 bits
 enum {
   SDAT = 2,
   CTRL = 3,
-  BIT_ONE_DELAY_MICROSEC = 3100,
-  BIT_TERMINATOR_DELAY_MICROSEC = 1950,
-  BIT_GAP_DELAY_MICROSEC = 1950,
+  BIT_ONE_DELAY_MICROSEC = 3200,
+  BIT_TERMINATOR_DELAY_MICROSEC = 2250,
+  BIT_GAP_DELAY_MICROSEC = 2250,
   ENABLE_OPEN_COLLECTOR = 0,
 };
 
@@ -83,11 +82,17 @@ void setup() {
   Serial.println(MSB, HEX);
 
   Serial.println("Kenwood VR-410 SL-16 commands:");
-  Serial.println("4096 is power on");
-  Serial.println("4224 is power off");
-  Serial.println("Type:");
+  Serial.println("Sending these commands to VR-410 works:");
+  Serial.println("4096 0x1000 activates power on");
+  Serial.println("4224 0x1080 activates power off");
+  Serial.println("1097 0x0499 activates TAPE input");
+  Serial.println("2120 0x0848 activates CD/DVD input");
+  Serial.println("63560 0xF848 activates PHONO input");
+  Serial.println("Found this matching reference:");
+  Serial.println("https://www.mikrocontroller.net/topic/101728");
+
   Serial.println("  value 0-65535 to send the corresponding command,");
-  Serial.println("  value less than zero to start a loop to automatically try all commands with delay of '-value' ms.");
+  Serial.println("  range like 4096-4224 to send commands every 20 msec.");
 }
 
 void sendWord(unsigned long word) {
@@ -144,25 +149,37 @@ void sendCommand(unsigned long word) {
 }
 
 void tryAllWords(unsigned long wait) {
-  for (unsigned long cmd = 4097; cmd <= 4224; cmd++) {
+  for (unsigned long cmd = 0; cmd <= 4096; cmd++) {
     sendCommand(cmd);
     delay(wait);
   }
 }
 
+void tryWordRange(unsigned long startValue, unsigned long endValue) {
+	int increment = endValue >= startValue ? 1 : -1;
+  for (unsigned long cmd = startValue; cmd != endValue + increment; cmd += increment) {
+    sendCommand(cmd);
+    delay(20);
+  }
+  Serial.println("Scan Finished: " + String(startValue) + "-" + String(endValue));
+}
+
+char input[65];
 void loop() {
   while (Serial.available()) {
-    const long val = Serial.parseInt();
-    if (val == 0) {
-    	continue;
-    }
-    if (val < 0) {
-      tryAllWords((unsigned long)(-val));
-    } else if (val > 0 && val < (MSB << 1)) {
-      sendCommand((unsigned long)(val));
-    } else {
-    	Serial.println("Unexpected Value");
-    	Serial.println(val);
-    }
+  	size_t length = Serial.readBytesUntil('\n', input, 64);
+		input[length] = 0;
+  	long startValue = -1;
+  	long endValue = -1;
+  	char *value = strchr(input, '-');
+  	if (value != 0) {
+  		*value = 0;
+  		startValue = atol(input);
+  		endValue = atol(value + 1);
+  		tryWordRange(startValue, endValue);
+  	} else {
+  		startValue = atol(input);
+  		sendCommand(startValue);
+  	}
   }
 }
