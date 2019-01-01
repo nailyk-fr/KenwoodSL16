@@ -85,8 +85,11 @@ void setup() {
   Serial.println("Sending these commands to VR-410 works:");
   Serial.println("4096 0x1000 activates power on");
   Serial.println("4224 0x1080 activates power off");
-  Serial.println("1097 0x0499 activates TAPE input");
+  Serial.println("1096 0x0498 activates TAPE input");
+  Serial.println("1097 0x0499 activates TAPE input as well. Weird.");
   Serial.println("2120 0x0848 activates CD/DVD input");
+  Serial.println("2152 0x0868 activates CD/DVD input as well. Weird.");
+  Serial.println("2242 0x08C2 activates CD/DVD input as well. Weird.");
   Serial.println("63560 0xF848 activates PHONO input");
   Serial.println("Found this matching reference:");
   Serial.println("https://www.mikrocontroller.net/topic/101728");
