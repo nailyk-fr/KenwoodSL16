@@ -1,0 +1,12 @@
+[Unit]
+Description=Control kenwood power amp
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/root/scripts/kenwood.sh 1
+ExecStop=/root/scripts/kenwood.sh 0
+
+[Install]
+WantedBy=multi-user.target
+
