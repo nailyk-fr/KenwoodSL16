@@ -60,6 +60,7 @@ const unsigned long MSB = 1l << 15; // 16 bits
 enum {
   SDAT = 2,
   CTRL = 3,
+  LED = 10,
   BIT_ONE_DELAY_MICROSEC = 3200,
   BIT_TERMINATOR_DELAY_MICROSEC = 2250,
   BIT_GAP_DELAY_MICROSEC = 2250,
@@ -75,27 +76,12 @@ void setup() {
   pinMode(CTRL, INPUT);
   pinMode(SDAT, INPUT);
 
-  // Usage
-  Serial.print("MSB: ");
-  Serial.print(MSB, DEC);
-  Serial.print(" / 0x");
-  Serial.println(MSB, HEX);
 
-  Serial.println("Kenwood VR-410 SL-16 commands:");
-  Serial.println("Sending these commands to VR-410 works:");
-  Serial.println("4096 0x1000 activates power on");
-  Serial.println("4224 0x1080 activates power off");
-  Serial.println("1096 0x0498 activates TAPE input");
-  Serial.println("1097 0x0499 activates TAPE input as well. Weird.");
-  Serial.println("2120 0x0848 activates CD/DVD input");
-  Serial.println("2152 0x0868 activates CD/DVD input as well. Weird.");
-  Serial.println("2242 0x08C2 activates CD/DVD input as well. Weird.");
-  Serial.println("63560 0xF848 activates PHONO input");
-  Serial.println("Found this matching reference:");
-  Serial.println("https://www.mikrocontroller.net/topic/101728");
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
+  delay(500);
+  digitalWrite(LED, HIGH);
 
-  Serial.println("  value 0-65535 to send the corresponding command,");
-  Serial.println("  range like 4096-4224 to send commands every 20 msec.");
 }
 
 void sendWord(unsigned long word) {
@@ -129,10 +115,6 @@ void sendWord(unsigned long word) {
 void sendCommand(unsigned long word) {
   pinMode(CTRL, OUTPUT);
   pinMode(SDAT, OUTPUT);
-  Serial.print("Command ");
-  Serial.print(word, DEC);
-  Serial.print(" / 0x");
-  Serial.println(word, HEX);
 
   digitalWrite(SDAT, LOW);
   if (ENABLE_OPEN_COLLECTOR) {
@@ -149,40 +131,24 @@ void sendCommand(unsigned long word) {
   digitalWrite(CTRL, LOW);
   pinMode(SDAT, INPUT);
   pinMode(CTRL, INPUT);
+
 }
 
-void tryAllWords(unsigned long wait) {
-  for (unsigned long cmd = 0; cmd <= 4096; cmd++) {
-    sendCommand(cmd);
-    delay(wait);
-  }
-}
 
-void tryWordRange(unsigned long startValue, unsigned long endValue) {
-	int increment = endValue >= startValue ? 1 : -1;
-  for (unsigned long cmd = startValue; cmd != endValue + increment; cmd += increment) {
-    sendCommand(cmd);
-    delay(20);
-  }
-  Serial.println("Scan Finished: " + String(startValue) + "-" + String(endValue));
-}
-
-char input[65];
 void loop() {
-  while (Serial.available()) {
-  	size_t length = Serial.readBytesUntil('\n', input, 64);
-		input[length] = 0;
-  	long startValue = -1;
-  	long endValue = -1;
-  	char *value = strchr(input, '-');
-  	if (value != 0) {
-  		*value = 0;
-  		startValue = atol(input);
-  		endValue = atol(value + 1);
-  		tryWordRange(startValue, endValue);
-  	} else {
-  		startValue = atol(input);
-  		sendCommand(startValue);
-  	}
+  while(true){
+    while (Serial.available()) {
+      char input[1];
+      size_t length = Serial.readBytes(input,1);
+      if (input[0] == '1') {
+        sendCommand(4096); // Power on
+        sendCommand(2120); // DVD input
+        digitalWrite(LED, LOW);
+      } else {
+        sendCommand(4224); // Power off
+        digitalWrite(LED, HIGH);
+      }
+      delay(2000);
+    }
   }
 }

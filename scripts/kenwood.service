@@ -4,8 +4,8 @@ Description=Control kenwood power amp
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=/root/scripts/kenwood.sh 1
-ExecStop=/root/scripts/kenwood.sh 0
+ExecStart=/root/scripts/kenwood.py 1
+ExecStop=/root/scripts/kenwood.py 0
 
 [Install]
 WantedBy=multi-user.target
