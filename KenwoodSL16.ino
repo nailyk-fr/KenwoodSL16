@@ -67,6 +67,21 @@ enum {
   ENABLE_OPEN_COLLECTOR = 0,
 };
 
+
+/*************** for IR ********/
+// Define the pin for the IR LED
+#define IR_SEND_PIN 6 // MUST BE defined BEFORE the include-IRremote.hpp
+
+#include <IRremote.hpp>
+IRsend irsend;
+
+#define IR_REPEAT 4
+
+// Define the IR remote button code for power OFF
+//#define POWER_OFF_CODE 0xCCCC20DF
+#define POWER_OFF_CODE 0xA90
+/********************************/
+
 void sendWord(unsigned long word) {
   // StartBit
   if (ENABLE_OPEN_COLLECTOR) {
@@ -117,6 +132,14 @@ void sendCommand(unsigned long word) {
 
 }
 
+void sendSonyPowerOFF(void){
+  for(int i=0; i < IR_REPEAT; i++){
+    // Send power OFF command
+    irsend.sendSony(POWER_OFF_CODE, 12);
+    delay(40);
+  }
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -134,7 +157,6 @@ void setup() {
 
 }
 
-
 void loop() {
   while(true){
     while (Serial.available()) {
@@ -148,6 +170,7 @@ void loop() {
         sendCommand(4224); // Power off
         digitalWrite(LED, HIGH);
       }
+      sendSonyPowerOFF();
       delay(2000);
     }
   }
