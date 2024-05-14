@@ -67,23 +67,6 @@ enum {
   ENABLE_OPEN_COLLECTOR = 0,
 };
 
-void setup() {
-  Serial.begin(115200);
-
-  // Set-up SL lines
-  digitalWrite(CTRL, LOW);
-  digitalWrite(SDAT, LOW);
-  pinMode(CTRL, INPUT);
-  pinMode(SDAT, INPUT);
-
-
-  pinMode(LED, OUTPUT);
-  digitalWrite(LED, LOW);
-  delay(500);
-  digitalWrite(LED, HIGH);
-
-}
-
 void sendWord(unsigned long word) {
   // StartBit
   if (ENABLE_OPEN_COLLECTOR) {
@@ -134,6 +117,23 @@ void sendCommand(unsigned long word) {
 
 }
 
+void setup() {
+  Serial.begin(115200);
+
+  // Set-up SL lines
+  digitalWrite(CTRL, LOW);
+  digitalWrite(SDAT, LOW);
+  pinMode(CTRL, INPUT);
+  pinMode(SDAT, INPUT);
+
+
+  pinMode(LED, OUTPUT);
+  digitalWrite(LED, LOW);
+  delay(500);
+  digitalWrite(LED, HIGH);
+
+}
+
 
 void loop() {
   while(true){
@@ -152,3 +152,4 @@ void loop() {
     }
   }
 }
+
